@@ -8,3 +8,6 @@ print(f"'{text_to_copy}' copied to clipboard.")
 # Paste text from the clipboard
 pasted_text = pyperclip.paste()
 print(f"Text pasted from clipboard: '{pasted_text}'")
+
+we need to update the list of fdata types to be added deleted
+
