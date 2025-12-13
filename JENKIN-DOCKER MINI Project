@@ -1,0 +1,50 @@
+pipeline {
+    agent any
+    tools {
+        maven 'mymaven'
+    }
+    stages {
+        stage ('code') {
+            steps {
+                git 'https://github.com/abbasshaik73/dockerwebapp.git'
+            }
+        }
+        stage ('cqa') {
+            steps {
+                withSonarQubeEnv('mysonar') {
+                    sh "mvn clean verify sonar:sonar -Dsonar.projectKey=myproject"
+                }
+            }
+        }
+        stage ('build') {
+            steps {
+                sh 'mvn clean package'
+                sh 'cp -r target Docker-app'
+            }
+        }
+        stage ('artifact') {
+            steps {
+                nexusArtifactUploader artifacts: [[artifactId: 'vprofile', classifier: '', file: 'target/vprofile-v2.war', type: 'war']], credentialsId: 'nexus', groupId: 'com.visualpathit', nexusUrl: '3.84.208.180:8081', nexusVersion: 'nexus3', protocol: 'http', repository: 'repo', version: 'v2'
+            }
+        }
+        stage ('Dockerfile') {
+            steps {
+                sh 'docker build -t appimage Docker-app'
+                sh 'docker build -t dbimage Docker-db'
+            }
+        }
+        stage ('Deploy') {
+            steps {
+                sh 'docker run -d --name devopsdb -p 3306:3306 dbimage'
+                sh 'docker run -itd --name appcont -p 1111:8080 --link devopsdb:mysql appimage'
+            }
+        }
+    }
+    post {
+        always {
+            mail to: 'abbasshaik0908@gmail.com',
+            subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+            body: "*${currentBuild.currentResult}:* Job ${env.JOB_NAME} \n build ${env.BUILD_NUMBER} \n More info at: ${env.BUILD_URL}"
+        }
+    }
+}
