@@ -1,0 +1,75 @@
+pipeline {
+    agent {
+        node {
+            label 'docker'
+        }
+    }
+    tools {
+        maven 'mymaven'
+    }
+    stages {
+        stage ('code') {
+            steps {
+                git 'https://github.com/abbasshaik73/dockerwebapp.git'
+            }
+        }
+        stage ('CQA') {
+            steps {
+                withSonarQubeEnv('mysonar') {
+                    sh "mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=project"
+                }
+            }
+        }
+        stage ('build') {
+            steps {
+                sh 'mvn clean package'
+                sh 'cp -r target Docker-app'
+            }
+        }
+        stage ('Artifact') {
+            steps {
+                nexusArtifactUploader artifacts: [[artifactId: 'vprofile', classifier: '', file: 'target/vprofile-v2.war', type: 'war']], credentialsId: 'nexus', groupId: 'com.visualpathit', nexusUrl: '13.218.65.141:8081', nexusVersion: 'nexus3', protocol: 'http', repository: 'repo', version: 'v2'
+            }
+        }
+        stage ('Dockerfile') {
+            steps {
+                sh 'docker build -t appimage Docker-app'
+                sh 'docker build -t dbimage Docker-db'
+            }
+        }
+        stage ('Scan') {
+            steps {
+                sh 'trivy image appimage'
+                sh 'trivy image dbimage'
+            }
+        }
+        stage ('TAG') {
+            steps {
+                sh 'docker tag appimage abbasshaik739/repo:appimage'
+                sh 'docker tag dbimage abbasshaik739/repo:dbimage'
+            }
+        }
+        stage ('PUSH') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'dockerhub-cred') {
+                        sh 'docker push abbasshaik739/repo:appimage'
+                        sh 'docker push abbasshaik739/repo:dbimage'
+                    }
+                }
+            }
+        }
+        stage ('Deploy') {
+            steps {
+                sh 'docker stack deploy abbas -c compose.yml'
+            }
+        }
+    }
+    post {
+        always {
+            mail to: 'abbasshaik0908@gmail.com',
+            subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+            body: "*${currentBuild.currentResult}:* Job ${env.JOB_NAME} \n build ${env.BUILD_NUMBER} \n More info at: ${env.BUILD_URL}"
+        }
+    }
+}
