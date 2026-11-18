@@ -1,0 +1,77 @@
+pipeline {
+    agent {
+        node {
+            label 'prod'
+        }
+    }
+    environment {
+        scannerHome = tool 'mysonar'
+    }
+    stages {
+        stage ("CODE") {
+            steps {
+                git 'https://github.com/abbasshaik73/python-code-library-app.git'
+            }
+        }
+        stage ("Code-Quality-Analysis") {
+            steps {
+                withSonarQubeEnv('mysonar') {
+                    sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=MyProject"
+                }
+            }
+        }
+        stage ("Build") {
+            steps {
+                sh '''docker build -t dbimage database/
+                      docker build -t authimage auth/
+                      docker build -t bookimage book/
+                      docker build -t borrowimage borrow/
+                      docker build -t appimage . 
+                      '''
+            }
+        }
+        stage ("Scan Image") {
+            steps {
+                sh 'trivy image dbimage'
+                sh 'trivy image authimage'
+                sh 'trivy image bookimage'
+                sh 'trivy image borrowimage'
+                sh 'trivy image appimage'
+            }
+        }
+        stage ('Tag Image') {
+            steps {
+                sh 'docker tag dbimage abbasshaik739/python:dbimage'
+                sh 'docker tag authimage abbasshaik739/python:authimage'
+                sh 'docker tag bookimage abbasshaik739/python:bookimage'
+                sh 'docker tag borrowimage abbasshaik739/python:borrowimage'
+                sh 'docker tag appimage abbasshaik739/python:appimage'
+            }
+        }
+        stage ('Push Image to Dockerhub Registry') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'dockerhub-cred') {
+                        sh 'docker push abbasshaik739/python:dbimage'
+                        sh 'docker push abbasshaik739/python:authimage'
+                        sh 'docker push abbasshaik739/python:bookimage'
+                        sh 'docker push abbasshaik739/python:borrowimage'
+                        sh 'docker push abbasshaik739/python:appimage'
+                    }
+                }
+            }
+        }
+        stage ('Deploy') {
+            steps {
+                sh 'docker stack deploy abbas -c compose.yml'
+            }
+        }
+    }
+    post {
+        always {
+            mail to: 'abbasshaik0908@gmail.com',
+            subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+            body: "*${currentBuild.currentResult}:* Job ${env.JOB_NAME} \n build ${env.BUILD_NUMBER} \n More info at: ${env.BUILD_URL}"
+        }
+    }
+}

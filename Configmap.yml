@@ -1,0 +1,9 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cm6
+data:
+  DB_PORT: "3306"
+  DB_VALUE: "admin"
+  APP_ENV: "dev"
