@@ -9,6 +9,6 @@ print(f"'{text_to_copy}' copied to clipboard.")
 pasted_text = pyperclip.paste()
 print(f"Text pasted from clipboard: '{pasted_text}'")
 
-we ne
+we need
 
 
